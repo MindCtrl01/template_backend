@@ -1,0 +1,41 @@
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+EXPOSE 80
+EXPOSE 443
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy the project files
+COPY ["src/TemplateBackend.API/TemplateBackend.API.csproj", "src/TemplateBackend.API/"]
+COPY ["src/TemplateBackend.PaymentProcessor/TemplateBackend.PaymentProcessor.csproj", "src/TemplateBackend.PaymentProcessor/"]
+
+# Restore dependencies
+RUN dotnet restore "src/TemplateBackend.PaymentProcessor/TemplateBackend.PaymentProcessor.csproj"
+
+# Copy the rest of the source code
+COPY . .
+
+# Build the payment processor
+WORKDIR "/src/src/TemplateBackend.PaymentProcessor"
+RUN dotnet build "TemplateBackend.PaymentProcessor.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "TemplateBackend.PaymentProcessor.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Set environment variables
+ENV ASPNETCORE_URLS=http://+:80
+ENV ASPNETCORE_ENVIRONMENT=Development
+
+# Expose port
+EXPOSE 80
+
+# Start the payment processor service
+ENTRYPOINT ["dotnet", "TemplateBackend.PaymentProcessor.dll"] 

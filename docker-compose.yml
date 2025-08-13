@@ -1,0 +1,181 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - template_backend_network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - template_backend_network
+
+  mongodb:
+    image: mongo:7.0
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=YourStrong@Passw0rd
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - template_backend_network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - template_backend_network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_DELETE_TOPIC_ENABLE: 'true'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - template_backend_network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - template_backend_network
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "7001:7001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:7001
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackend;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+      - ConnectionStrings__Redis=redis:6379
+      - ConnectionStrings__MongoDB=mongodb://admin:YourStrong@Passw0rd@mongodb:27017
+      - JwtSettings__SecretKey=your-super-secret-key-with-at-least-32-characters
+      - JwtSettings__Issuer=TemplateBackend
+      - JwtSettings__Audience=TemplateBackend
+      - EmailSettings__SmtpServer=smtp.gmail.com
+      - EmailSettings__SmtpPort=587
+      - EmailSettings__Username=your-email@gmail.com
+      - EmailSettings__Password=your-app-password
+      - EmailSettings__FromEmail=noreply@templatebackend.com
+      - EmailSettings__FromName=Template Backend
+      - EmailSettings__BaseUrl=http://localhost:7001
+      - MongoDBSettings__DatabaseName=TemplateBackend
+      - MongoDBSettings__EmailCollection=Emails
+      - MongoDBSettings__LogCollection=Logs
+      - KafkaSettings__BootstrapServers=kafka:29092
+      - KafkaSettings__ClientId=template-backend
+      - KafkaSettings__ConsumerGroupId=template-backend-group
+      - KafkaSettings__PaymentTopic=payment-events
+      - KafkaSettings__PaymentResultTopic=payment-results
+      - KafkaSettings__SubscriptionTopic=subscription-events
+      - KafkaSettings__RetryTopic=payment-retry
+    depends_on:
+      - sqlserver
+      - redis
+      - mongodb
+      - kafka
+    networks:
+      - template_backend_network
+
+  payment-processor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.payment-processor
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__MongoDB=mongodb://admin:YourStrong@Passw0rd@mongodb:27017
+      - PaymentSettings__StripeSecretKey=sk_test_your_stripe_secret_key_here
+      - PaymentSettings__StripePublishableKey=pk_test_your_stripe_publishable_key_here
+      - PaymentSettings__WebhookSecret=whsec_your_webhook_secret_here
+      - KafkaSettings__BootstrapServers=kafka:29092
+      - KafkaSettings__ClientId=payment-processor
+      - KafkaSettings__ConsumerGroupId=payment-processor-group
+      - MongoDBSettings__DatabaseName=TemplateBackend
+    depends_on:
+      - mongodb
+      - kafka
+    networks:
+      - template_backend_network
+
+  webhook-processor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.webhook-processor
+    ports:
+      - "7002:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+      - WebhookProcessorSettings__ProcessingInterval=30000
+      - WebhookProcessorSettings__ErrorRetryInterval=5000
+      - WebhookProcessorSettings__MaxRetries=10
+      - WebhookProcessorSettings__EnableDetailedLogging=true
+    depends_on:
+      - sqlserver
+    networks:
+      - template_backend_network
+
+volumes:
+  sqlserver_data:
+  redis_data:
+  mongodb_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+
+networks:
+  template_backend_network:
+    driver: bridge 

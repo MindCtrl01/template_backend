@@ -21,9 +21,9 @@ builder.Services.AddIdentity<User, Role>(options =>
 })
 .AddEntityFrameworkStores<ApplicationDbContext>();
 
-// Add DbContext with SQLite
+// Add DbContext with SQL Server
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add Health Checks
 builder.Services.AddHealthChecks();
@@ -47,11 +47,11 @@ builder.Host.UseSerilog((context, configuration) => configuration
 
 var app = builder.Build();
 
-// Ensure database is created
+// Apply database migrations
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    context.Database.EnsureCreated();
+    context.Database.Migrate();
 }
 
 // Configure the HTTP request pipeline

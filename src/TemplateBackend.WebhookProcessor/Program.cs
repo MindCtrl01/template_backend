@@ -46,6 +46,13 @@ try
 
     var app = builder.Build();
 
+    // Apply database migrations
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<WebhookDbContext>();
+        context.Database.Migrate();
+    }
+
     await app.RunAsync();
 }
 catch (Exception ex)

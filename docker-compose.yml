@@ -99,9 +99,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:7001
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackend;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
       - ConnectionStrings__Redis=redis:6379
-      - ConnectionStrings__MongoDB=mongodb://admin:YourStrong@Passw0rd@mongodb:27017
+      - ConnectionStrings__MongoDB=mongodb://admin:YourStrong%40Passw0rd@mongodb:27017/TemplateBackend
       - JwtSettings__SecretKey=your-super-secret-key-with-at-least-32-characters
       - JwtSettings__Issuer=TemplateBackend
       - JwtSettings__Audience=TemplateBackend
@@ -136,7 +136,7 @@ services:
       dockerfile: docker/Dockerfile.payment-processor
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__MongoDB=mongodb://admin:YourStrong@Passw0rd@mongodb:27017
+      - ConnectionStrings__MongoDB=mongodb://admin:YourStrong%40Passw0rd@mongodb:27017/TemplateBackend
       - PaymentSettings__StripeSecretKey=sk_test_your_stripe_secret_key_here
       - PaymentSettings__StripePublishableKey=pk_test_your_stripe_publishable_key_here
       - PaymentSettings__WebhookSecret=whsec_your_webhook_secret_here

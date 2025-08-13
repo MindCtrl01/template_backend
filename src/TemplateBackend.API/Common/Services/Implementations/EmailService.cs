@@ -257,11 +257,11 @@ public class EmailService : IEmailService
         {
             // TODO: Implement IP geolocation service
             // For now, return a placeholder
-            return "Unknown Location";
+            return await Task.FromResult("Unknown Location");
         }
         catch
         {
-            return "Unknown Location";
+            return await Task.FromResult("Unknown Location");
         }
     }
 }

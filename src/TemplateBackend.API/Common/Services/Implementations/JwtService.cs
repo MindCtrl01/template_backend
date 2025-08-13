@@ -41,7 +41,7 @@ public class JwtService : IJwtService
             {
                 foreach (var userRole in user.UserRoles)
                 {
-                    if (userRole.Role != null)
+                    if (userRole.Role != null && userRole.Role.Name != null)
                     {
                         claims.Add(new Claim(ClaimTypes.Role, userRole.Role.Name));
                     }

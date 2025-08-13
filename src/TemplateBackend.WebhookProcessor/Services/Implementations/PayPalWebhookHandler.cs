@@ -66,7 +66,7 @@ public class PayPalWebhookHandler : IWebhookHandler
             throw;
         }
 
-        return paymentEvents;
+        return await Task.FromResult(paymentEvents);
     }
 
     public async Task<bool> ValidateSignatureAsync(string payload, string signature)

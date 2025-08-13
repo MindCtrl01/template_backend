@@ -32,31 +32,31 @@ public class StripeWebhookHandler : IWebhookHandler
             switch (eventType)
             {
                 case "payment_intent.succeeded":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "payment_intent.succeeded", "completed"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "payment_intent.succeeded", "completed"));
                     break;
 
                 case "payment_intent.payment_failed":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "payment_intent.payment_failed", "failed"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "payment_intent.payment_failed", "failed"));
                     break;
 
                 case "charge.succeeded":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "charge.succeeded", "completed"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "charge.succeeded", "completed"));
                     break;
 
                 case "charge.failed":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "charge.failed", "failed"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "charge.failed", "failed"));
                     break;
 
                 case "charge.refunded":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "charge.refunded", "refunded"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "charge.refunded", "refunded"));
                     break;
 
                 case "invoice.payment_succeeded":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "invoice.payment_succeeded", "completed"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "invoice.payment_succeeded", "completed"));
                     break;
 
                 case "invoice.payment_failed":
-                    paymentEvents.Add(CreatePaymentEvent(stripeEvent, "invoice.payment_failed", "failed"));
+                    paymentEvents.Add(CreatePaymentEvent(stripeEvent!, "invoice.payment_failed", "failed"));
                     break;
 
                 default:
@@ -70,14 +70,14 @@ public class StripeWebhookHandler : IWebhookHandler
             throw;
         }
 
-        return paymentEvents;
+        return await Task.FromResult(paymentEvents);
     }
 
     public async Task<bool> ValidateSignatureAsync(string payload, string signature)
     {
         // In production, implement proper Stripe signature validation
         // using the webhook secret
-        return !string.IsNullOrEmpty(signature);
+        return await Task.FromResult(!string.IsNullOrEmpty(signature));
     }
 
     /// <summary>

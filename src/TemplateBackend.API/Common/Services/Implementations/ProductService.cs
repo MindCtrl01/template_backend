@@ -166,7 +166,7 @@ public class ProductService : IProductService
             var filteredProducts = allProducts.Where(p =>
                 !p.IsDeleted &&
                 (p.Name.ToLowerInvariant().Contains(searchLower) ||
-                 p.Description.ToLowerInvariant().Contains(searchLower) ||
+                 (p.Description != null && p.Description.ToLowerInvariant().Contains(searchLower)) ||
                  p.Sku.ToLowerInvariant().Contains(searchLower) ||
                  (p.Tags != null && p.Tags.ToLowerInvariant().Contains(searchLower)))
             ).ToList();

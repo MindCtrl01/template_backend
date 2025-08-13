@@ -335,10 +335,7 @@ public class OTPService : IOTPService
     private byte[] GenerateRandomKey(int length)
     {
         var key = new byte[length];
-        using (var rng = new RNGCryptoServiceProvider())
-        {
-            rng.GetBytes(key);
-        }
+        RandomNumberGenerator.Fill(key);
         return key;
     }
 

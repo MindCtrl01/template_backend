@@ -16,11 +16,11 @@ services:
     networks:
       - template_backend_network
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q 'SELECT 1'"]
+      test: ["CMD-SHELL", "timeout 10s bash -c '</dev/tcp/localhost/1433' || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   redis:
     image: redis:7-alpine
@@ -132,10 +132,14 @@ services:
       - KafkaSettings__SubscriptionTopic=subscription-events
       - KafkaSettings__RetryTopic=payment-retry
     depends_on:
-      - sqlserver
-      - redis
-      - mongodb
-      - kafka
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mongodb:
+        condition: service_started
+      kafka:
+        condition: service_started
     networks:
       - template_backend_network
 
@@ -173,7 +177,8 @@ services:
       - WebhookProcessorSettings__MaxRetries=10
       - WebhookProcessorSettings__EnableDetailedLogging=true
     depends_on:
-      - sqlserver
+      sqlserver:
+        condition: service_healthy
     networks:
       - template_backend_network
 

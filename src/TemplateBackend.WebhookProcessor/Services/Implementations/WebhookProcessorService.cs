@@ -225,7 +225,7 @@ public class WebhookProcessorService : IWebhookProcessorService
             .Where(w => w.ProcessedAt.HasValue)
             .Select(w => (w.ProcessedAt!.Value - w.CreatedAt).TotalMilliseconds)
             .DefaultIfEmpty()
-            .AverageAsync();
+            .FirstOrDefaultAsync();
 
         return new WebhookStatistics
         {

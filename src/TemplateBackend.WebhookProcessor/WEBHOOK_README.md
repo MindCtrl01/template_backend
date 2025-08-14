@@ -71,10 +71,26 @@ Payment Provider → Webhook → API → Processor → Database
 - Statistics monitoring
 - Health checks
 
-## 📊 Database Schema
+## 📊 Database Schema & Migration
 
-### **WebhookEvent Table**
-```sql
+### **🗄️ Tables Overview**
+
+The WebhookProcessor service requires 3 main tables in SQL Server:
+
+1. **WebhookEvents** - Stores all incoming webhook events
+2. **WebhookProcessingLogs** - Tracks processing steps and performance
+3. **PaymentEvents** - Extracts and stores payment-specific data
+
+### **🚀 Auto Migration Script**
+
+#### **Quick Setup for Docker SQL Server:**
+```bash
+# Execute this in your terminal to create all tables automatically
+docker exec template_backend_sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "YourStrong@Passw0rd" -Q "
+USE TemplateBackendDb;
+
+-- Create WebhookEvents table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WebhookEvents' AND xtype='U')
 CREATE TABLE WebhookEvents (
     Id INT PRIMARY KEY IDENTITY(1,1),
     EventId NVARCHAR(255) NOT NULL,
@@ -94,10 +110,9 @@ CREATE TABLE WebhookEvents (
     UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     ProcessedAt DATETIME2
 );
-```
 
-### **WebhookProcessingLog Table**
-```sql
+-- Create WebhookProcessingLogs table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WebhookProcessingLogs' AND xtype='U')
 CREATE TABLE WebhookProcessingLogs (
     Id INT PRIMARY KEY IDENTITY(1,1),
     WebhookEventId INT NOT NULL,
@@ -109,10 +124,9 @@ CREATE TABLE WebhookProcessingLogs (
     ProcessedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     FOREIGN KEY (WebhookEventId) REFERENCES WebhookEvents(Id)
 );
-```
 
-### **PaymentEvent Table**
-```sql
+-- Create PaymentEvents table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='PaymentEvents' AND xtype='U')
 CREATE TABLE PaymentEvents (
     Id INT PRIMARY KEY IDENTITY(1,1),
     WebhookEventId INT NOT NULL,
@@ -126,6 +140,191 @@ CREATE TABLE PaymentEvents (
     OrderId NVARCHAR(255),
     TransactionId NVARCHAR(255),
     Metadata NVARCHAR(4000),
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    FOREIGN KEY (WebhookEventId) REFERENCES WebhookEvents(Id)
+);
+
+-- Create indexes for better performance
+CREATE NONCLUSTERED INDEX IX_WebhookEvents_Provider_EventType ON WebhookEvents(Provider, EventType);
+CREATE NONCLUSTERED INDEX IX_WebhookEvents_Status_CreatedAt ON WebhookEvents(Status, CreatedAt);
+CREATE NONCLUSTERED INDEX IX_PaymentEvents_PaymentId ON PaymentEvents(PaymentId);
+CREATE NONCLUSTERED INDEX IX_PaymentEvents_Provider_Status ON PaymentEvents(Provider, Status);
+
+PRINT 'Webhook Processor tables created successfully!';
+"
+```
+
+#### **Alternative: PowerShell Script for Windows**
+```powershell
+# Save as create-webhook-tables.ps1
+# Run: .\create-webhook-tables.ps1
+
+$connectionString = "Server=localhost,1433;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;"
+
+$sqlScript = @"
+USE TemplateBackendDb;
+
+-- Create WebhookEvents table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WebhookEvents' AND xtype='U')
+BEGIN
+    CREATE TABLE WebhookEvents (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        EventId NVARCHAR(255) NOT NULL,
+        Provider NVARCHAR(50) NOT NULL,
+        EventType NVARCHAR(100) NOT NULL,
+        Status NVARCHAR(50) NOT NULL,
+        RawPayload NVARCHAR(MAX) NOT NULL,
+        ProcessedPayload NVARCHAR(MAX),
+        Signature NVARCHAR(1000),
+        SourceIp NVARCHAR(45),
+        UserAgent NVARCHAR(500),
+        ErrorMessage NVARCHAR(2000),
+        AttemptCount INT NOT NULL DEFAULT 1,
+        MaxAttempts INT NOT NULL DEFAULT 3,
+        NextRetryAt DATETIME2,
+        CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        ProcessedAt DATETIME2
+    );
+    PRINT 'WebhookEvents table created';
+END
+
+-- Create WebhookProcessingLogs table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WebhookProcessingLogs' AND xtype='U')
+BEGIN
+    CREATE TABLE WebhookProcessingLogs (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        WebhookEventId INT NOT NULL,
+        ProcessingStep NVARCHAR(100) NOT NULL,
+        Status NVARCHAR(50) NOT NULL,
+        DurationMs BIGINT NOT NULL,
+        ErrorMessage NVARCHAR(2000),
+        AdditionalData NVARCHAR(4000),
+        ProcessedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        FOREIGN KEY (WebhookEventId) REFERENCES WebhookEvents(Id)
+    );
+    PRINT 'WebhookProcessingLogs table created';
+END
+
+-- Create PaymentEvents table
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='PaymentEvents' AND xtype='U')
+BEGIN
+    CREATE TABLE PaymentEvents (
+        Id INT PRIMARY KEY IDENTITY(1,1),
+        WebhookEventId INT NOT NULL,
+        PaymentId NVARCHAR(255) NOT NULL,
+        Provider NVARCHAR(50) NOT NULL,
+        EventType NVARCHAR(100) NOT NULL,
+        Status NVARCHAR(50) NOT NULL,
+        Amount DECIMAL(18,2),
+        Currency NVARCHAR(3),
+        CustomerId NVARCHAR(255),
+        OrderId NVARCHAR(255),
+        TransactionId NVARCHAR(255),
+        Metadata NVARCHAR(4000),
+        CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        FOREIGN KEY (WebhookEventId) REFERENCES WebhookEvents(Id)
+    );
+    PRINT 'PaymentEvents table created';
+END
+
+-- Create performance indexes
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_WebhookEvents_Provider_EventType')
+    CREATE NONCLUSTERED INDEX IX_WebhookEvents_Provider_EventType ON WebhookEvents(Provider, EventType);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_WebhookEvents_Status_CreatedAt')
+    CREATE NONCLUSTERED INDEX IX_WebhookEvents_Status_CreatedAt ON WebhookEvents(Status, CreatedAt);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_PaymentEvents_PaymentId')
+    CREATE NONCLUSTERED INDEX IX_PaymentEvents_PaymentId ON PaymentEvents(PaymentId);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_PaymentEvents_Provider_Status')
+    CREATE NONCLUSTERED INDEX IX_PaymentEvents_Provider_Status ON PaymentEvents(Provider, Status);
+
+PRINT 'All Webhook Processor tables and indexes created successfully!';
+"@
+
+try {
+    Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlScript -Verbose
+    Write-Host "✅ Database tables created successfully!" -ForegroundColor Green
+} catch {
+    Write-Host "❌ Error creating tables: $($_.Exception.Message)" -ForegroundColor Red
+}
+```
+
+#### **Verification Script**
+```bash
+# Verify tables were created successfully
+docker exec template_backend_sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "YourStrong@Passw0rd" -Q "
+USE TemplateBackendDb;
+SELECT 
+    TABLE_NAME as 'Table Name',
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = t.TABLE_NAME) as 'Column Count'
+FROM INFORMATION_SCHEMA.TABLES t 
+WHERE TABLE_NAME IN ('WebhookEvents', 'WebhookProcessingLogs', 'PaymentEvents')
+ORDER BY TABLE_NAME;
+
+PRINT 'Table verification completed.';
+"
+```
+
+### **📋 Table Details**
+
+#### **1. WebhookEvents Table**
+```sql
+CREATE TABLE WebhookEvents (
+    Id INT PRIMARY KEY IDENTITY(1,1),
+    EventId NVARCHAR(255) NOT NULL,           -- Provider's event ID
+    Provider NVARCHAR(50) NOT NULL,           -- stripe, paypal, etc.
+    EventType NVARCHAR(100) NOT NULL,         -- payment.succeeded, etc.
+    Status NVARCHAR(50) NOT NULL,             -- pending, completed, failed
+    RawPayload NVARCHAR(MAX) NOT NULL,        -- Original webhook payload
+    ProcessedPayload NVARCHAR(MAX),           -- Processed/cleaned payload
+    Signature NVARCHAR(1000),                 -- Webhook signature
+    SourceIp NVARCHAR(45),                    -- Source IP address
+    UserAgent NVARCHAR(500),                  -- User agent string
+    ErrorMessage NVARCHAR(2000),              -- Error details if failed
+    AttemptCount INT NOT NULL DEFAULT 1,      -- Number of processing attempts
+    MaxAttempts INT NOT NULL DEFAULT 3,       -- Maximum retry attempts
+    NextRetryAt DATETIME2,                    -- When to retry next
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    ProcessedAt DATETIME2                     -- When processing completed
+);
+```
+
+#### **2. WebhookProcessingLogs Table**
+```sql
+CREATE TABLE WebhookProcessingLogs (
+    Id INT PRIMARY KEY IDENTITY(1,1),
+    WebhookEventId INT NOT NULL,              -- FK to WebhookEvents
+    ProcessingStep NVARCHAR(100) NOT NULL,    -- validation, parsing, persistence
+    Status NVARCHAR(50) NOT NULL,             -- success, failed, warning
+    DurationMs BIGINT NOT NULL,               -- Processing time in milliseconds
+    ErrorMessage NVARCHAR(2000),              -- Step-specific errors
+    AdditionalData NVARCHAR(4000),            -- Extra context data
+    ProcessedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    FOREIGN KEY (WebhookEventId) REFERENCES WebhookEvents(Id)
+);
+```
+
+#### **3. PaymentEvents Table**
+```sql
+CREATE TABLE PaymentEvents (
+    Id INT PRIMARY KEY IDENTITY(1,1),
+    WebhookEventId INT NOT NULL,              -- FK to WebhookEvents
+    PaymentId NVARCHAR(255) NOT NULL,         -- Payment/transaction ID
+    Provider NVARCHAR(50) NOT NULL,           -- Payment provider
+    EventType NVARCHAR(100) NOT NULL,         -- Event type
+    Status NVARCHAR(50) NOT NULL,             -- Payment status
+    Amount DECIMAL(18,2),                     -- Payment amount
+    Currency NVARCHAR(3),                     -- Currency code (USD, EUR)
+    CustomerId NVARCHAR(255),                 -- Customer identifier
+    OrderId NVARCHAR(255),                    -- Order identifier
+    TransactionId NVARCHAR(255),              -- Transaction identifier
+    Metadata NVARCHAR(4000),                  -- Additional payment data
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
     FOREIGN KEY (WebhookEventId) REFERENCES WebhookEvents(Id)

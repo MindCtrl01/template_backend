@@ -109,29 +109,41 @@ docker-compose up -d sqlserver redis mongodb kafka zookeeper
 ```
 
 #### 2. Configure Local Development
-Update `src/TemplateBackend.API/appsettings.json`:
+The project is already configured for local development with SQL Server LocalDB:
+
+**For Local Development (LocalDB):**
+- `appsettings.Development.json` uses LocalDB connection
+- No additional SQL Server installation needed
+- Automatic database creation and migration
+
+**Connection String Formats:**
+
 ```json
+// Local Development (LocalDB) - appsettings.Development.json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=TemplateBackend;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;",
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=TemplateBackendDb;Trusted_Connection=true;MultipleActiveResultSets=true",
     "Redis": "localhost:6379",
-    "MongoDB": "mongodb://admin:YourStrong@Passw0rd@localhost:27017"
-  },
-  "KafkaSettings": {
-    "BootstrapServers": "localhost:9092",
-    "ClientId": "template-backend",
-    "ConsumerGroupId": "template-backend-group",
-    "PaymentTopic": "payment-events",
-    "PaymentResultTopic": "payment-results",
-    "SubscriptionTopic": "subscription-events",
-    "RetryTopic": "payment-retry"
+    "MongoDB": "mongodb://localhost:27017"
+  }
+}
+
+// Docker Environment (Full SQL Server) - docker-compose.yml
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=sqlserver;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;",
+    "Redis": "redis:6379",
+    "MongoDB": "mongodb://admin:YourStrong%40Passw0rd@mongodb:27017/TemplateBackend"
   }
 }
 ```
 
-#### 3. Run Migrations
+#### 3. Database Setup
 ```bash
 cd src/TemplateBackend.API
+
+# Migrations are applied automatically on startup
+# Or run manually if needed:
 dotnet ef database update
 ```
 
@@ -141,10 +153,71 @@ cd src/TemplateBackend.API
 dotnet run
 ```
 
-#### 5. Start Payment Processor Service
+#### 5. Start WebhookProcessor Service
+```bash
+cd src/TemplateBackend.WebhookProcessor
+dotnet run
+```
+
+#### 6. Start Payment Processor Service
 ```bash
 cd src/TemplateBackend.PaymentProcessor
 dotnet run
+```
+
+## 🗃️ Database Configuration
+
+### SQL Server Setup
+
+This project uses **SQL Server** as the primary database for both the API and WebhookProcessor services.
+
+#### Local Development
+- **LocalDB**: No installation required, uses SQL Server LocalDB
+- **Connection**: Windows Authentication (Trusted_Connection=true)
+- **Database**: `TemplateBackendDb`
+- **Migrations**: Applied automatically on startup
+
+#### Docker Environment
+- **Container**: `mcr.microsoft.com/mssql/server:2022-latest`
+- **Authentication**: SQL Server Authentication (sa user)
+- **Port**: `1433:1433`
+- **Volume**: Persistent storage with `sqlserver_data`
+- **Health Check**: Built-in SQL Server health monitoring
+
+#### Connection String Examples
+
+```bash
+# Local Development (LocalDB)
+Server=(localdb)\\mssqllocaldb;Database=TemplateBackendDb;Trusted_Connection=true;MultipleActiveResultSets=true
+
+# Docker/Production (Full SQL Server)
+Server=sqlserver;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+
+# External SQL Server
+Server=your-server.database.windows.net;Database=TemplateBackendDb;User Id=your-user;Password=your-password;Encrypt=true;
+```
+
+### Database Services Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   API Service   │    │ WebhookProcessor │    │ PaymentProcessor│
+│                 │    │    Service       │    │    Service      │
+│   (SQL Server)  │    │   (SQL Server)   │    │   (MongoDB)     │
+└─────────┬───────┘    └────────┬─────────┘    └─────────┬───────┘
+          │                     │                        │
+          └─────────────────────┼────────────────────────┘
+                                │
+                    ┌───────────▼──────────┐
+                    │   SQL Server DB      │
+                    │  (TemplateBackendDb) │
+                    │                      │
+                    │ • User Management    │
+                    │ • Authentication     │
+                    │ • Product Catalog    │
+                    │ • Webhook Events     │
+                    │ • Processing Logs    │
+                    └──────────────────────┘
 ```
 
 ## 🔧 Configuration
@@ -153,14 +226,17 @@ dotnet run
 
 #### API Service
 ```bash
-# Database
-ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackend;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+# Database (Docker Environment)
+ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+
+# Database (Local Development)
+ConnectionStrings__DefaultConnection=Server=(localdb)\\mssqllocaldb;Database=TemplateBackendDb;Trusted_Connection=true;MultipleActiveResultSets=true
 
 # Redis
 ConnectionStrings__Redis=redis:6379
 
 # MongoDB
-ConnectionStrings__MongoDB=mongodb://admin:YourStrong@Passw0rd@mongodb:27017
+ConnectionStrings__MongoDB=mongodb://admin:YourStrong%40Passw0rd@mongodb:27017/TemplateBackend
 
 # Kafka
 KafkaSettings__BootstrapServers=kafka:29092
@@ -179,10 +255,19 @@ EmailSettings__Username=your-email@gmail.com
 EmailSettings__Password=your-app-password
 ```
 
+#### WebhookProcessor Service
+```bash
+# Database (Docker Environment)
+ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TemplateBackendDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+
+# Database (Local Development)
+ConnectionStrings__DefaultConnection=Server=(localdb)\\mssqllocaldb;Database=TemplateBackendDb;Trusted_Connection=true;MultipleActiveResultSets=true
+```
+
 #### Payment Processor Service
 ```bash
 # MongoDB
-ConnectionStrings__MongoDB=mongodb://admin:YourStrong@Passw0rd@mongodb:27017
+ConnectionStrings__MongoDB=mongodb://admin:YourStrong%40Passw0rd@mongodb:27017/TemplateBackend
 
 # Stripe
 PaymentSettings__StripeSecretKey=sk_test_your_stripe_secret_key_here
